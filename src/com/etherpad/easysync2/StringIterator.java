@@ -1,5 +1,9 @@
 package com.etherpad.easysync2;
 
+/**
+ * A custom made String Iterator
+ * @param str {string} String to be iterated over
+ */
 public class StringIterator {
 	int curIndex = 0;
 	String str;

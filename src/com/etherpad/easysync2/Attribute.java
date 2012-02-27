@@ -15,7 +15,12 @@ public class Attribute {
 	
 	static public Attribute parse(String str) {
 		String[] arr = str.split(",");
-		assert(arr.length==2);
-		return new Attribute(arr[0], arr[1]);
+		if (arr.length == 2) {
+			return new Attribute(arr[0], arr[1]);
+		} else 
+			if (arr.length == 1) {
+				return new Attribute(arr[0], "");				
+			} else
+				return new Attribute("","");
 	}
 }

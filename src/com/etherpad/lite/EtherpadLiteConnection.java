@@ -5,7 +5,7 @@ import java.net.MalformedURLException;
 import org.json.JSONException;
 import org.json.JSONObject;
 
-import com.etherpad.easysync2.ChangeSet;
+import com.etherpad.easysync2.Changeset;
 
 import io.socket.IOAcknowledge;
 import io.socket.IOCallback;
@@ -16,6 +16,7 @@ public class EtherpadLiteConnection {
 	SocketIO sock = new SocketIO();
 	String padID;
 	String text;
+	EtherpadEventHandler handler;
 	
 	class EtherpadLiteConnectionHandler implements IOCallback {
 
@@ -93,14 +94,17 @@ public class EtherpadLiteConnection {
 				handleFirstMessage(arg0);
 				return;
 			}
+			System.out.println(arg0.toString());
+			handler.onMessage(arg0);
 			
 			try {
 				if (arg0.has("type") && arg0.getString("type").equals("COLLABROOM")) {
 					arg0 = arg0.getJSONObject("data");
 				}
 				if (arg0.has("type") && arg0.getString("type").equals("NEW_CHANGES")) {
-					ChangeSet cs = ChangeSet.unpack(arg0.getString("changeset"));
-					text = cs.applyToText(text);
+					//handler.onChangeset(arg0.getString("changeset"));
+//					ChangeSet cs = ChangeSet.unpack(arg0.getString("changeset"));
+//					text = cs.applyToText(text);
 				}
 				
 				if (text.contains("damn")) {
@@ -113,8 +117,13 @@ public class EtherpadLiteConnection {
 		}
 	}
 	
-	public EtherpadLiteConnection(String url, String padID) {
+	public void sendChange(JSONObject arg0) {
+		sock.send(arg0);
+	}
+	
+	public EtherpadLiteConnection(String url, String padID, EtherpadEventHandler handler) {
 		this.padID = padID;
+		this.handler = handler;
 		try {
 			sock.connect("http://localhost:9001", new EtherpadLiteConnectionHandler());
 		} catch (MalformedURLException e) {

@@ -22,6 +22,11 @@ public class OperationSerializer {
 		int prevIndex;
 		CharSequence ops;
 
+		/**
+		 * creates an iterator which decodes string changeset operations
+		 * @param ops {string} String encoding of the change operations to be performed 
+		 * @param startIndex {int} from where in the string should the iterator start 
+		 */
 		void initIterator(CharSequence ops, int startIndex) {
 			this.ops = ops;
 			curIndex = startIndex;

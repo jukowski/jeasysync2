@@ -1,5 +1,9 @@
 package com.etherpad.easysync2;
 
+/**
+ * creates an object that allows you to append operations (type Op) and also
+ * compresses them if possible
+ */
 public class SmartOpAssembler {
 	MergingOpAssembler minusAssem, plusAssem, keepAssem;
 	StringAssembler assem;
@@ -67,7 +71,7 @@ public class SmartOpAssembler {
 	public void appendOpWithText(char opcode, String text, String attribs, AttribPool pool)
 	{
 		Operation op = new Operation(opcode);
-		op.attribs = ChangeSet.makeAttribsString(opcode, attribs, pool);
+		op.attribs = Changeset.makeAttribsString(opcode, attribs, pool);
 		int lastNewlinePos = text.lastIndexOf('\n');
 		if (lastNewlinePos < 0)
 		{

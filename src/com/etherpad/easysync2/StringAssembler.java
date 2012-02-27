@@ -1,6 +1,8 @@
 package com.etherpad.easysync2;
 
-
+/**
+ * A custom made StringBuffer 
+ */
 public class StringAssembler {
 	StringBuffer sb;
 	
