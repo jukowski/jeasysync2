@@ -1,4 +1,4 @@
-import com.etherpad.easysync2.ChangeSet;
+import com.etherpad.easysync2.Changeset;
 import com.etherpad.easysync2.Operation;
 
 
@@ -11,7 +11,7 @@ public class EasySyncTest {
 	 * @param args
 	 */
 	public static void main(String[] args) {
-		ChangeSet myChange = ChangeSet.unpack(cs);
+		Changeset myChange = Changeset.unpack(cs);
 		System.out.println(myChange);
 		for (Operation r : myChange.getOpIterator()) {
 			System.out.println(r);
