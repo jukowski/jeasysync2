@@ -3,7 +3,6 @@ package com.etherpad.easysync2;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
-import java.util.Collections;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -185,11 +184,11 @@ public class Changeset {
 		// to produce the merged set.
 		if ((att2.length() == 0) || (pool == null)) return "";
 		if (att1.length()==0) return att2;
-		ArrayList<String> atts = new ArrayList<String>();
+		ArrayList<Attribute> atts = new ArrayList<Attribute>();
 		Matcher m;
 		int start = 0; 
 		int len = att2.length();
-		while ((m=opRegex.matcher(att2.subSequence(start, len))).matches()) {
+		while ((start < len) && (m=opRegex.matcher(att2.subSequence(start, len))).matches()) {
 			atts.add(pool.getAttrib(Changeset.parseNum(m.group())));			  
 			start = m.end()+1;
 		}
@@ -197,9 +196,9 @@ public class Changeset {
 		start = 0;
 		len = att1.length();
 		while ((m=opRegex.matcher(att1.subSequence(start, len))).matches()) {
-			Attribute pair1 = Attribute.parse(pool.getAttrib(Changeset.parseNum(m.group())));
+			Attribute pair1 = pool.getAttrib(Changeset.parseNum(m.group()));
 			for (int i = 0; i < atts.size(); i++) {
-				Attribute pair2 = Attribute.parse(atts.get(i));
+				Attribute pair2 = atts.get(i);
 				if (pair1.key == pair2.key) {
 					if (pair1.value.compareTo(pair2.value) <= 0) {
 						// winner of merge is pair1, delete this attribute
@@ -214,7 +213,7 @@ public class Changeset {
 		StringAssembler buf = new StringAssembler();
 		for (int i = 0; i < atts.size(); i++) {
 			buf.append("*");
-			buf.append(Changeset.numToString(pool.putAttrib(Attribute.parse(atts.get(i)))));
+			buf.append(Changeset.numToString(pool.putAttrib(atts.get(i))));
 		}
 		return buf.toString();
 	};
@@ -238,7 +237,6 @@ public class Changeset {
 			if (opOut.opcode != 0)
 			{
 				//print(opOut.toSource());
-				System.out.println("opout = "+opOut);
 				assem.append(opOut);
 				opOut.opcode = 0;
 			}
@@ -265,7 +263,86 @@ public class Changeset {
 
 		return Changeset.pack(oldLen, newLen + oldLen - oldPos, newOps, unpacked2.charBank);
 	}
+	/**
+	 * Used to check if a Changeset if valid
+	 * @param cs {Changeset} Changeset to be checked
+	 */
+	
+	
+	/**
+	 * compose two Changesets
+	 * @param cs1 {Changeset} first Changeset
+	 * @param cs2 {Changeset} second Changeset
+	 * @param pool {AtribsPool} Attribs pool
+	 */
+	public static String compose(String cs1, String cs2, AttribPool pool) {
+	  Changeset unpacked1 = unpack(cs1);
+	  Changeset unpacked2 = unpack(cs2);
+	  int len1 = unpacked1.oldLen;
+	  int len2 = unpacked1.newLen;
+	  assert(len2 == unpacked2.oldLen);
+	  int len3 = unpacked2.newLen;
+	  StringIterator bankIter1 = stringIterator(unpacked1.charBank);
+	  StringIterator bankIter2 = stringIterator(unpacked2.charBank);
+	  StringAssembler bankAssem = stringAssembler();
 
+	  ChangesetComposeCombiner csCombiner = new ChangesetComposeCombiner(bankIter1, bankIter2, bankAssem, pool);
+	  
+	  String newOps = applyZip(unpacked1.ops, 0, unpacked2.ops, 0, csCombiner);
+
+	  return pack(len1, len3, newOps, bankAssem.toString());
+	};
+	
+	public static String checkRep(String cs) {
+	  // doesn't check things that require access to attrib pool (e.g. attribute order)
+	  // or original string (e.g. newline positions)
+	  Changeset unpacked = unpack(cs);
+	  int oldLen = unpacked.oldLen;
+	  int newLen = unpacked.newLen;
+	  String ops = unpacked.ops;
+	  String charBank = unpacked.charBank;
+
+	  SmartOpAssembler assem = smartOpAssembler();
+	  int oldPos = 0;
+	  int calcNewLen = 0;
+	  int numInserted = 0;
+	  OpIterator iter = opIterator(ops);
+	  while (iter.hasNext()) {
+	    Operation o = iter.next();
+	    switch (o.opcode) {
+	    case '=':
+	      oldPos += o.chars;
+	      calcNewLen += o.chars;
+	      break;
+	    case '-':
+	      oldPos += o.chars;
+	      assert(oldPos < oldLen);
+	      break;
+	    case '+':
+	      {
+	        calcNewLen += o.chars;
+	        numInserted += o.chars;
+	        assert(calcNewLen < newLen);
+	        break;
+	      }
+	    }
+	    assem.append(o);
+	  }
+
+	  calcNewLen += oldLen - oldPos;
+	  charBank = charBank.substring(0, numInserted);
+	  while (charBank.length() < numInserted) {
+	    charBank += "?";
+	  }
+
+	  assem.endDocument();
+	  String normalized = pack(oldLen, calcNewLen, assem.toString(), charBank);
+	  assert(normalized == cs);
+
+	  return cs;
+	}
+
+	
 	/**
 	 * Composes two attribute strings (see below) into one.
 	 * @param att1 {string} first attribute string
@@ -296,26 +373,24 @@ public class Changeset {
 		}
 		if (att2.length()==0) return att1;
 
-		if ((att2.length() == 0) || (pool == null)) return "";
-		if (att1.length()==0) return att2;
-		ArrayList<String> atts = new ArrayList<String>();
+		ArrayList<Attribute> atts = new ArrayList<Attribute>();
 		Matcher m;
 
 		int start = 0; 
-		int len = att2.length()-1;
-		while ((m=opRegex.matcher(att2.subSequence(start, len))).matches()) {
+		int len = att1.length();
+		while ((start < len) && (m=opRegex.matcher(att1.subSequence(start, len))).matches()) {
 			atts.add(pool.getAttrib(Changeset.parseNum(m.group(1))));			  
 			start = m.end()+1;
 		}
 
 		start = 0;
-		len = att1.length()-1;
-		while ((m=opRegex.matcher(att1.subSequence(start, len))).matches()) {
-			Attribute pair = Attribute.parse(pool.getAttrib(parseNum(m.group(1))));
+		len = att2.length();
+		while ((start<len) && (m=opRegex.matcher(att2.subSequence(start, len))).matches()) {
+			Attribute pair = pool.getAttrib(parseNum(m.group(1)));
 			Boolean found = false;
 			for (int i = 0; i < atts.size(); i++) {
-				Attribute oldPair = Attribute.parse(atts.get(i));
-				if (oldPair.key == pair.key) {
+				Attribute oldPair = atts.get(i);
+				if (oldPair.key.equals(pair.key)) {
 					if (pair.value.length()>0 || resultIsMutation) {
 						oldPair.value = pair.value;
 					} else {
@@ -326,12 +401,12 @@ public class Changeset {
 				}
 			}
 			if ((!found) && (pair.value.length()>0 || resultIsMutation)) {
-				atts.add(pair.toString());
+				atts.add(pair);
 			}
 			start = m.end()+1;
 		}		  
 
-		String[] _atts = new String[atts.size()];
+		Attribute[] _atts = new Attribute[atts.size()];
 		_atts = atts.toArray(_atts);
 
 		Arrays.sort(_atts);
@@ -339,11 +414,43 @@ public class Changeset {
 		StringAssembler buf = Changeset.stringAssembler();
 		for (int i = 0; i < _atts.length; i++) {
 			buf.append("*");
-			buf.append(numToString(pool.putAttrib(Attribute.parse(_atts[i]))));
+			buf.append(numToString(pool.putAttrib(_atts[i])));
 		}
 		//print(att1+" / "+att2+" / "+buf.toString());
 		return buf.toString();
 	};
+	
+	/**
+	 * Applies a Changeset to a string
+	 * @params cs {string} String encoded Changeset
+	 * @params str {string} String to which a Changeset should be applied
+	 */
+	public static String applyToText(String cs, String str) {
+	  Changeset unpacked = unpack(cs);
+	  assert(str.length() == unpacked.oldLen);
+	  OpIterator csIter = opIterator(unpacked.ops);
+	  StringIterator bankIter = stringIterator(unpacked.charBank);
+	  StringIterator strIter = stringIterator(str);
+	  StringAssembler assem = stringAssembler();
+	  while (csIter.hasNext()) {
+	    Operation op = csIter.next();
+	    switch (op.opcode) {
+	    case '+':
+	      assem.append(bankIter.take(op.chars));
+	      break;
+	    case '-':
+	      strIter.skip(op.chars);
+	      break;
+	    case '=':
+	      assem.append(strIter.take(op.chars));
+	      break;
+	    }
+	  }
+	  assem.append(strIter.take(strIter.remaining()));
+	  return assem.toString();
+	};
+
+	
 
 	/**
 	 * Applies a Changeset to the attribs string of a AText.
@@ -369,4 +476,9 @@ public class Changeset {
 	public static StringAssembler stringAssembler() {
 		return new StringAssembler();
 	}
+
+	public static StringIterator stringIterator(String str) {
+		return new StringIterator(str);
+	}
+
 }

@@ -9,7 +9,7 @@ import org.json.JSONObject;
 
 public class AttribPool {
 
-	private HashMap<Integer, String> numToAttrib;
+	private HashMap<Integer, Attribute> numToAttrib;
 	private HashMap<String, Integer> attribToNum;
 	private int nextNum;
 	private AttribTester never;
@@ -19,11 +19,11 @@ public class AttribPool {
 	}
 
 	public interface AttribRunnable {
-		void run(String attribute);
+		void run(String key, String value);
 	};
 
 	public AttribPool() {
-		numToAttrib = new HashMap<Integer, String>();
+		numToAttrib = new HashMap<Integer, Attribute>();
 		attribToNum = new HashMap<String, Integer>();
 		nextNum = 0;
 		never = new AttribTester() {
@@ -50,44 +50,43 @@ public class AttribPool {
 		}
 		int num = nextNum++;
 		attribToNum.put(str, num);
-		numToAttrib.put(num, str);
+		numToAttrib.put(num, attrib);
 		return num;
 	};
 
-	public String getAttrib(int num)
+	public Attribute getAttrib(int num)
 	{
-		String pair = numToAttrib.get(num);
-		return pair; // return a mutable copy
+		return numToAttrib.get(num); // return a mutable copy
 	};
 
 	public String getAttribKey(int num)
 	{
-		String pair = numToAttrib.get(num);
-		if (pair!=null) 
+		Attribute pair = numToAttrib.get(num);
+		if (pair==null) 
 			return "";
-		return Attribute.parse(pair).key;
+		return pair.key;
 	};
 
 	public String getAttribValue(int num)
 	{
-		String pair = numToAttrib.get(num);
-		if (pair!=null) 
+		Attribute pair = numToAttrib.get(num);
+		if (pair==null) 
 			return "";
-		return Attribute.parse(pair).value;
+		return pair.value;
 	};
 
 	public void eachAttrib(AttribRunnable func)
 	{
-		for (String attr : numToAttrib.values())
+		for (Attribute attr : numToAttrib.values())
 		{
-			func.run(attr);
+			func.run(attr.key, attr.value);
 		}
 	};
 
 	public JSONObject toJsonable() throws JSONException
 	{
 		JSONObject result = new JSONObject();
-		result.put("numToAttrib", JSONUtils.toJSON(numToAttrib));
+//		result.put("numToAttrib", JSONUtils.toJSON(numToAttrib));
 		result.put("nextNum", nextNum);
 		return result;
 	};
@@ -95,10 +94,10 @@ public class AttribPool {
 
 	public static AttribPool fromJsonable(JSONObject obj) throws NumberFormatException, JSONException {
 		AttribPool result = new AttribPool();
-		result.numToAttrib = JSONUtils.fromJSONInt(obj.getJSONObject("numToAttrib"));
+//		result.numToAttrib = JSONUtils.fromJSONInt(obj.getJSONObject("numToAttrib"));
 		result.nextNum = obj.getInt("nextNum");
-		for (Entry<Integer, String > e  : result.numToAttrib.entrySet()) {
-			result.attribToNum.put(e.getValue(), e.getKey());
+		for (Entry<Integer, Attribute > e  : result.numToAttrib.entrySet()) {
+			result.attribToNum.put(e.getValue().toString(), e.getKey());
 		}
 		return result;
 	}

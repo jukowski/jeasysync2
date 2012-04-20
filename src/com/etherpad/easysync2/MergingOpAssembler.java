@@ -52,9 +52,9 @@ public class MergingOpAssembler {
 	{
 		if (op.chars > 0)
 		{
-			if (bufOp.opcode == op.opcode && bufOp.attribs == op.attribs)
+			if (bufOp.opcode == op.opcode && bufOp.attribs.equals(op.attribs))
 			{
-				if (op.lines > 0)
+				if (op.lines >= 0)
 				{
 					// bufOp and additional chars are all mergeable into a multi-line op
 					bufOp.chars += bufOpAdditionalCharsAfterNewline + op.chars;
