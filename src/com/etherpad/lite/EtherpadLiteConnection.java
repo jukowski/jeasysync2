@@ -1,16 +1,14 @@
 package com.etherpad.lite;
 
-import java.net.MalformedURLException;
-
-import org.json.JSONException;
-import org.json.JSONObject;
-
-import com.etherpad.easysync2.Changeset;
-
 import io.socket.IOAcknowledge;
 import io.socket.IOCallback;
 import io.socket.SocketIO;
 import io.socket.SocketIOException;
+
+import java.net.MalformedURLException;
+
+import org.json.JSONException;
+import org.json.JSONObject;
 
 public class EtherpadLiteConnection {
 	SocketIO sock = new SocketIO();
@@ -29,6 +27,7 @@ public class EtherpadLiteConnection {
 
 		@Override
 		public void onConnect() {
+			System.out.println("Connected");
 			JSONObject msg = new JSONObject();
 			try {
 				msg.put("component", "pad");
@@ -51,6 +50,7 @@ public class EtherpadLiteConnection {
 
 		@Override
 		public void onError(SocketIOException arg0) {
+			arg0.printStackTrace();
 		}
 
 		@Override
@@ -112,8 +112,7 @@ public class EtherpadLiteConnection {
 				}
 			} catch (JSONException e) {
 				// TODO Auto-generated catch block
-				e.printStackTrace();
-			}
+				e.printStackTrace();			}
 		}
 	}
 	
@@ -125,7 +124,8 @@ public class EtherpadLiteConnection {
 		this.padID = padID;
 		this.handler = handler;
 		try {
-			sock.connect("http://localhost:9001", new EtherpadLiteConnectionHandler());
+			sock.addHeader("cookie", "express_sid=8tamlWAU9kAl0oICqwZa7Ary.msOdkOnNilroKlyrEkVwflf6leJ7yRcUkAG3HhKvlyc");
+			sock.connect(url, new EtherpadLiteConnectionHandler());
 		} catch (MalformedURLException e) {
 			e.printStackTrace();
 		}
