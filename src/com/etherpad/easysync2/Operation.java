@@ -22,7 +22,7 @@ public class Operation {
 		opcode = 0;
 		attribs = "";
 	}
-	
+		
 	/**
 	 * Creates a new Op object
 	 * @param optOpcode the type operation of the Op object

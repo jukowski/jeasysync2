@@ -1,9 +1,11 @@
 package com.etherpad.easysync2;
 
 import java.util.HashMap;
+import java.util.Map;
 import java.util.Map.Entry;
 import java.util.regex.Pattern;
 
+import org.json.JSONArray;
 import org.json.JSONException;
 import org.json.JSONObject;
 
@@ -94,11 +96,17 @@ public class AttribPool {
 
 	public static AttribPool fromJsonable(JSONObject obj) throws NumberFormatException, JSONException {
 		AttribPool result = new AttribPool();
-//		result.numToAttrib = JSONUtils.fromJSONInt(obj.getJSONObject("numToAttrib"));
-		result.nextNum = obj.getInt("nextNum");
-		for (Entry<Integer, Attribute > e  : result.numToAttrib.entrySet()) {
-			result.attribToNum.put(e.getValue().toString(), e.getKey());
+		if (!obj.has("numToAttrib")) 
+			return result;
+		Map<Integer, JSONArray> map = JSONUtils.fromJSONArray(obj.getJSONObject("numToAttrib"));
+		if (map == null || map.size()==0)
+			return result;
+		for (Entry<Integer, JSONArray> e : map.entrySet()) {
+			Attribute q = new Attribute(e.getValue().getString(0), e.getValue().getString(1));
+			result.attribToNum.put(q.toString(), e.getKey());
+			result.numToAttrib.put(e.getKey(), q);
 		}
+		result.nextNum = obj.getInt("nextNum");
 		return result;
 	}
 

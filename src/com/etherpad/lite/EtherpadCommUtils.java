@@ -1,29 +1,17 @@
 package com.etherpad.lite;
 
-import org.json.JSONException;
-import org.json.JSONObject;
+import java.util.Random;
 
 public class EtherpadCommUtils {
-	public static boolean isCollabRomm(JSONObject obj) throws JSONException {
-		return obj.has("type") && obj.getString("type").equals("COLLABROOM");
-	}
-
-	public static boolean isNewChanges(JSONObject obj) throws JSONException {
-		if (!EtherpadCommUtils.isCollabRomm(obj)) {
-			return false;
+	
+	public static String genSessionID() {
+		final String alpha = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz";
+		Random r = new Random();
+		char []q = new char[32];
+		for (int len=31; len>=0; len--) {
+			q[len] = alpha.charAt(r.nextInt(alpha.length()));
 		}
-		JSONObject arg0 = obj.getJSONObject("data");
-		return arg0.has("type") && arg0.getString("type").equals("NEW_CHANGES");
+		return new String(q);
 	}
-
-	public static Integer getCSRevision(JSONObject obj) throws JSONException {
-		if (!isNewChanges(obj)) {
-			return -1;
-		}
-		JSONObject arg0 = obj.getJSONObject("data");
-		JSONObject arg1 = obj.getJSONObject("data");
-		return 1;
-	}
-
 	
 }

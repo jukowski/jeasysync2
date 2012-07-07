@@ -6,12 +6,14 @@ import java.util.Collection;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
+import com.etherpad.easysync2.ChangesetUtils.RegexReplacer;
 import com.etherpad.easysync2.Operation.OperationCombiner;
 import com.etherpad.easysync2.OperationSerializer.OpIterator;
 
 public class Changeset {
 
 	static Pattern headerRegex = Pattern.compile("Z:([0-9a-z]+)([><])([0-9a-z]+)|");
+	static Pattern opRegex = Pattern.compile("\\*([0-9a-z]+)");
 
 	/**
 	 * length of the text before changeset can be applied
@@ -33,11 +35,18 @@ public class Changeset {
 	 */
 	String charBank;
 
+	public String getCharBank() {
+		return charBank;
+	}
+	
+	public String getOps() {
+		return ops;
+	}
 
 	public Iterable<Operation> getOpIterator() {
 		return new OperationSerializer.OpIterator(this.ops);
 	}
-
+	
 	public Changeset(int oldLen, int newLen, String ops, String charBank) {
 		this.oldLen = oldLen;
 		this.newLen = newLen;
@@ -123,6 +132,10 @@ public class Changeset {
 		return a.toString();
 	};
 
+	public String pack() {
+		return pack(oldLen, newLen, ops, charBank);
+	}
+
 	public static Changeset unpack(String cs) {
 		Matcher headerMatch = headerRegex.matcher(cs);
 		if (!headerMatch.find())
@@ -173,8 +186,7 @@ public class Changeset {
 		return "";
 	};
 
-	static Pattern opRegex = Pattern.compile("\\*([0-9a-z]+)");
-
+	
 	public static String followAttributes(String att1, String att2, AttribPool pool) {
 		// The merge of two sets of attribute changes to the same text
 		// takes the lexically-earlier value if there are two values
@@ -233,7 +245,7 @@ public class Changeset {
 			if ((op1.opcode==0) && iter1.hasNext()) op1 = iter1.next();
 			if ((op2.opcode==0) && iter2.hasNext()) op2 = iter2.next();
 			func.combine(op1, op2, opOut);
-			
+
 			if (opOut.opcode != 0)
 			{
 				//print(opOut.toSource());
@@ -245,7 +257,7 @@ public class Changeset {
 		return assem.toString();
 	};
 
-	public static String follow(Changeset cs1, Changeset cs2, boolean reverseInsertOrder, AttribPool pool) {
+	public static Changeset follow(Changeset cs1, Changeset cs2, boolean reverseInsertOrder, AttribPool pool) {
 		Changeset unpacked1 = cs1;
 		Changeset unpacked2 = cs2;
 		int len1 = unpacked1.oldLen;
@@ -261,14 +273,33 @@ public class Changeset {
 		oldPos = fw.getOldPos();
 		newLen = fw.getNewLen();
 
-		return Changeset.pack(oldLen, newLen + oldLen - oldPos, newOps, unpacked2.charBank);
+		return new Changeset(oldLen, newLen + oldLen - oldPos, newOps, unpacked2.charBank);
 	}
 	/**
 	 * Used to check if a Changeset if valid
 	 * @param cs {Changeset} Changeset to be checked
 	 */
-	
-	
+
+	public static Changeset compose(Changeset unpacked1, Changeset unpacked2, AttribPool pool) {
+		int len1 = unpacked1.oldLen;
+		int len2 = unpacked1.newLen;
+		assert(len2 == unpacked2.oldLen);
+		int len3 = unpacked2.newLen;
+		StringIterator bankIter1 = stringIterator(unpacked1.charBank);
+		StringIterator bankIter2 = stringIterator(unpacked2.charBank);
+		StringAssembler bankAssem = stringAssembler();
+
+		ChangesetComposeCombiner csCombiner = new ChangesetComposeCombiner(bankIter1, bankIter2, bankAssem, pool);
+
+		String newOps = applyZip(unpacked1.ops, 0, unpacked2.ops, 0, csCombiner);
+
+		return new Changeset(len1, len3, newOps, bankAssem.toString());
+	};
+
+	public Changeset compose(Changeset cs2, AttribPool pool) {
+		return compose(this, cs2, pool);
+	}
+
 	/**
 	 * compose two Changesets
 	 * @param cs1 {Changeset} first Changeset
@@ -276,73 +307,62 @@ public class Changeset {
 	 * @param pool {AtribsPool} Attribs pool
 	 */
 	public static String compose(String cs1, String cs2, AttribPool pool) {
-	  Changeset unpacked1 = unpack(cs1);
-	  Changeset unpacked2 = unpack(cs2);
-	  int len1 = unpacked1.oldLen;
-	  int len2 = unpacked1.newLen;
-	  assert(len2 == unpacked2.oldLen);
-	  int len3 = unpacked2.newLen;
-	  StringIterator bankIter1 = stringIterator(unpacked1.charBank);
-	  StringIterator bankIter2 = stringIterator(unpacked2.charBank);
-	  StringAssembler bankAssem = stringAssembler();
-
-	  ChangesetComposeCombiner csCombiner = new ChangesetComposeCombiner(bankIter1, bankIter2, bankAssem, pool);
-	  
-	  String newOps = applyZip(unpacked1.ops, 0, unpacked2.ops, 0, csCombiner);
-
-	  return pack(len1, len3, newOps, bankAssem.toString());
+		Changeset unpacked1 = unpack(cs1);
+		Changeset unpacked2 = unpack(cs2);
+		Changeset result = compose(unpacked1, unpacked2, pool);
+		return result.pack();
 	};
-	
+
 	public static String checkRep(String cs) {
-	  // doesn't check things that require access to attrib pool (e.g. attribute order)
-	  // or original string (e.g. newline positions)
-	  Changeset unpacked = unpack(cs);
-	  int oldLen = unpacked.oldLen;
-	  int newLen = unpacked.newLen;
-	  String ops = unpacked.ops;
-	  String charBank = unpacked.charBank;
+		// doesn't check things that require access to attrib pool (e.g. attribute order)
+		// or original string (e.g. newline positions)
+		Changeset unpacked = unpack(cs);
+		int oldLen = unpacked.oldLen;
+		int newLen = unpacked.newLen;
+		String ops = unpacked.ops;
+		String charBank = unpacked.charBank;
 
-	  SmartOpAssembler assem = smartOpAssembler();
-	  int oldPos = 0;
-	  int calcNewLen = 0;
-	  int numInserted = 0;
-	  OpIterator iter = opIterator(ops);
-	  while (iter.hasNext()) {
-	    Operation o = iter.next();
-	    switch (o.opcode) {
-	    case '=':
-	      oldPos += o.chars;
-	      calcNewLen += o.chars;
-	      break;
-	    case '-':
-	      oldPos += o.chars;
-	      assert(oldPos < oldLen);
-	      break;
-	    case '+':
-	      {
-	        calcNewLen += o.chars;
-	        numInserted += o.chars;
-	        assert(calcNewLen < newLen);
-	        break;
-	      }
-	    }
-	    assem.append(o);
-	  }
+		SmartOpAssembler assem = smartOpAssembler();
+		int oldPos = 0;
+		int calcNewLen = 0;
+		int numInserted = 0;
+		OpIterator iter = opIterator(ops);
+		while (iter.hasNext()) {
+			Operation o = iter.next();
+			switch (o.opcode) {
+			case '=':
+				oldPos += o.chars;
+				calcNewLen += o.chars;
+				break;
+			case '-':
+				oldPos += o.chars;
+				assert(oldPos < oldLen);
+				break;
+			case '+':
+			{
+				calcNewLen += o.chars;
+				numInserted += o.chars;
+				assert(calcNewLen < newLen);
+				break;
+			}
+			}
+			assem.append(o);
+		}
 
-	  calcNewLen += oldLen - oldPos;
-	  charBank = charBank.substring(0, numInserted);
-	  while (charBank.length() < numInserted) {
-	    charBank += "?";
-	  }
+		calcNewLen += oldLen - oldPos;
+		charBank = charBank.substring(0, numInserted);
+		while (charBank.length() < numInserted) {
+			charBank += "?";
+		}
 
-	  assem.endDocument();
-	  String normalized = pack(oldLen, calcNewLen, assem.toString(), charBank);
-	  assert(normalized == cs);
+		assem.endDocument();
+		String normalized = pack(oldLen, calcNewLen, assem.toString(), charBank);
+		assert(normalized == cs);
 
-	  return cs;
+		return cs;
 	}
 
-	
+
 	/**
 	 * Composes two attribute strings (see below) into one.
 	 * @param att1 {string} first attribute string
@@ -410,7 +430,7 @@ public class Changeset {
 		_atts = atts.toArray(_atts);
 
 		Arrays.sort(_atts);
-		
+
 		StringAssembler buf = Changeset.stringAssembler();
 		for (int i = 0; i < _atts.length; i++) {
 			buf.append("*");
@@ -419,38 +439,38 @@ public class Changeset {
 		//print(att1+" / "+att2+" / "+buf.toString());
 		return buf.toString();
 	};
-	
+
 	/**
 	 * Applies a Changeset to a string
 	 * @params cs {string} String encoded Changeset
 	 * @params str {string} String to which a Changeset should be applied
 	 */
 	public static String applyToText(String cs, String str) {
-	  Changeset unpacked = unpack(cs);
-	  assert(str.length() == unpacked.oldLen);
-	  OpIterator csIter = opIterator(unpacked.ops);
-	  StringIterator bankIter = stringIterator(unpacked.charBank);
-	  StringIterator strIter = stringIterator(str);
-	  StringAssembler assem = stringAssembler();
-	  while (csIter.hasNext()) {
-	    Operation op = csIter.next();
-	    switch (op.opcode) {
-	    case '+':
-	      assem.append(bankIter.take(op.chars));
-	      break;
-	    case '-':
-	      strIter.skip(op.chars);
-	      break;
-	    case '=':
-	      assem.append(strIter.take(op.chars));
-	      break;
-	    }
-	  }
-	  assem.append(strIter.take(strIter.remaining()));
-	  return assem.toString();
+		Changeset unpacked = unpack(cs);
+		assert(str.length() == unpacked.oldLen);
+		OpIterator csIter = opIterator(unpacked.ops);
+		StringIterator bankIter = stringIterator(unpacked.charBank);
+		StringIterator strIter = stringIterator(str);
+		StringAssembler assem = stringAssembler();
+		while (csIter.hasNext()) {
+			Operation op = csIter.next();
+			switch (op.opcode) {
+			case '+':
+				assem.append(bankIter.take(op.chars));
+				break;
+			case '-':
+				strIter.skip(op.chars);
+				break;
+			case '=':
+				assem.append(strIter.take(op.chars));
+				break;
+			}
+		}
+		assem.append(strIter.take(strIter.remaining()));
+		return assem.toString();
 	};
 
-	
+
 
 	/**
 	 * Applies a Changeset to the attribs string of a AText.
@@ -465,6 +485,14 @@ public class Changeset {
 		return applyZip(astr, 0, unpacked.ops, 0, soc); 
 	};	
 
+	public String applyToAttribution(String astr, AttribPool pool) {
+		Changeset unpacked = this;
+		SlicerOperationCombiner soc = new SlicerOperationCombiner(pool);
+
+		return applyZip(astr, 0, unpacked.ops, 0, soc); 
+	};	
+
+
 	public static OpIterator opIterator(String opsStr) {
 		return new OpIterator(opsStr);
 	}
@@ -472,7 +500,7 @@ public class Changeset {
 	public static SmartOpAssembler smartOpAssembler() {
 		return new SmartOpAssembler();
 	}
-	
+
 	public static StringAssembler stringAssembler() {
 		return new StringAssembler();
 	}
@@ -480,5 +508,18 @@ public class Changeset {
 	public static StringIterator stringIterator(String str) {
 		return new StringIterator(str);
 	}
+
+	public static void moveOpsToNewPool (Changeset cs, final AttribPool oldPool, final AttribPool newPool) {
+		cs.ops = ChangesetUtils.regexReplacer(opRegex, cs.ops, new RegexReplacer() {
+
+			@Override
+			public String replace(Matcher m) {
+				String att = m.group(1);
+				int newId = newPool.putAttrib(oldPool.getAttrib(Changeset.parseNum(att)));
+				return "*"+Changeset.numToString(newId);
+			}
+		});
+	};
+
 
 }

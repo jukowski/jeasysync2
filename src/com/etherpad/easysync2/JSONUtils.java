@@ -4,6 +4,7 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.Map.Entry;
 
+import org.json.JSONArray;
 import org.json.JSONException;
 import org.json.JSONObject;
 
@@ -25,5 +26,15 @@ public class JSONUtils {
 		return result;
 	}
 
-	
+	public static HashMap<Integer, JSONArray> fromJSONArray(JSONObject obj) throws NumberFormatException, JSONException {
+		HashMap<Integer, JSONArray> result = new HashMap<Integer, JSONArray>();
+		// HACK: if the list is empty. Otherwise getNames throws an exception :(
+		if (obj.toString().length()==2)
+			return result;
+		for(String name : JSONObject.getNames(obj)) {
+			result.put(Integer.parseInt(name), obj.getJSONArray(name));
+		}
+		return result;
+	}
+
 }
